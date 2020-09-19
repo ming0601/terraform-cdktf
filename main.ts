@@ -1,3 +1,4 @@
+import { ComputeFirewall } from './.gen/providers/google/compute-firewall';
 import { ComputeNetwork } from './.gen/providers/google/compute-network';
 import { ComputeInstance } from './.gen/providers/google/compute-instance';
 import { GoogleProvider } from './.gen/providers/google/google-provider';
@@ -12,7 +13,9 @@ class MyStack extends TerraformStack {
     new GoogleProvider(this, 'google', {
       project: 'tf-gcp-1',
       region: 'us-central1',
-      zone: 'us-central1-c'
+      zone: 'us-central1-c',
+      // TODO
+      credentials: ''
     });
 
     const computeInstance = new ComputeInstance(this, 'compute', {
@@ -32,25 +35,43 @@ class MyStack extends TerraformStack {
         {
           network: 'default'
         }
-      ]
+      ],
+      tags: ['http-server'],
+      // TODO
+      metadataStartupScript: ''
     });
 
 
-    const vpcNetwork = new ComputeNetwork(this, 'vpc_network', {
+    new ComputeNetwork(this, 'vpc_network', {
       name: 'tf-gcp-network',
       autoCreateSubnetworks: true
     });
 
-    new TerraformOutput(this, 'instance_id', {
-      value: computeInstance.instanceId
+    new ComputeFirewall(this, 'http-server', {
+      name: 'default-allow-terraform',
+      network: 'default',
+      allow: [
+        {
+          protocol: 'tcp',
+          ports: ['80']
+        }
+      ],
+      sourceRanges: ['0.0.0.0/0'],
+      targetTags: ['http-server']
     });
 
-    new TerraformOutput(this, 'vpc_network_description', {
-      value: vpcNetwork.description
-    });
+    const accessConfig = computeInstance.networkInterface[0].accessConfig;
+    if (accessConfig) {
+      new TerraformOutput(this, 'ip', {
+        value: accessConfig[0].natIp
+      });
+    } else {
+      new TerraformOutput(this, 'ip', {
+        value: 'natIp is undefined!'
+      });
+    }
+
   }
-
-
 }
 
 const app = new App();
