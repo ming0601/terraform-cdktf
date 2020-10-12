@@ -4,21 +4,25 @@ import { ComputeInstance } from './.gen/providers/google/compute-instance';
 import { GoogleProvider } from './.gen/providers/google/google-provider';
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
+import * as path from 'path'
+import * as fs from 'fs'
 
 class MyStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
     super(scope, name);
+
+    const credentialsPath = path.join(process.cwd(), 'google.json')
+    const credentials = fs.existsSync(credentialsPath) ? fs.readFileSync(credentialsPath).toString() : '{}'
 
     // define resources here
     new GoogleProvider(this, 'google', {
       project: 'tf-gcp-1',
       region: 'us-central1',
       zone: 'us-central1-c',
-      // TODO
-      credentials: ''
+      credentials
     });
 
-    const computeInstance = new ComputeInstance(this, 'compute', {
+    new ComputeInstance(this, 'compute', {
       machineType: 'f1-micro',
       name: 'tf-gcp-instance',
       bootDisk: [
@@ -37,8 +41,7 @@ class MyStack extends TerraformStack {
         }
       ],
       tags: ['http-server'],
-      // TODO
-      metadataStartupScript: ''
+      metadataStartupScript: 'sudo apt-get update && sudo apt-get install apache2 -y && echo \'<!doctype html><html><body><h1>Hello!</h1></body></html>\' | sudo tee /var/www/html/index.html'
     });
 
 
@@ -60,16 +63,9 @@ class MyStack extends TerraformStack {
       targetTags: ['http-server']
     });
 
-    const accessConfig = computeInstance.networkInterface[0].accessConfig;
-    if (accessConfig) {
-      new TerraformOutput(this, 'ip', {
-        value: accessConfig[0].natIp
-      });
-    } else {
-      new TerraformOutput(this, 'ip', {
-        value: 'natIp is undefined!'
-      });
-    }
+    new TerraformOutput(this, 'ip', {
+      value: "${google_compute_instance.network_interface.0.access_config.0.nat_ip}"
+    });
 
   }
 }
